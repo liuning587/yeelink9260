@@ -113,6 +113,44 @@ send_data_to_yeelink(const char *device,
 
 /**
  ******************************************************************************
+ * @brief   设置led灯
+ * @param[in]  None
+ *
+ * @return  None
+ ******************************************************************************
+ */
+static void
+set_led(int fd, unsigned char state)
+{
+#define IOCTL_LED_ON    1
+#define IOCTL_LED_OFF   0
+    switch (state)
+    {
+        case 0: //关闭所有led
+            ioctl(fd,  IOCTL_LED_OFF, 0);
+            ioctl(fd,  IOCTL_LED_OFF, 1);
+            ioctl(fd,  IOCTL_LED_OFF, 2);
+            ioctl(fd,  IOCTL_LED_OFF, 3);
+            break;
+        case 1: //打开所有led
+            ioctl(fd,  IOCTL_LED_ON, 0);
+            ioctl(fd,  IOCTL_LED_ON, 1);
+            ioctl(fd,  IOCTL_LED_ON, 2);
+            ioctl(fd,  IOCTL_LED_ON, 3);
+            break;
+        case 2: //打开1号led
+            ioctl(fd,  IOCTL_LED_ON, 0);
+            break;
+        case 3: //打开2号led
+            ioctl(fd,  IOCTL_LED_ON, 1);
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ ******************************************************************************
  * @brief   主函数
  * @param[in]  None
  * @param[out] None
@@ -130,6 +168,7 @@ int main(int argc, char** argv)
     const char *psenbuf;
 //    char buf[1024];
     int dht11_fd = 0;
+    int led_fd = 0;
     unsigned char datbuf[5];
 
 
@@ -140,6 +179,14 @@ int main(int argc, char** argv)
         perror("open device dht11");
         exit(1);
     }
+    led_fd = open("/dev/leds", 0);
+    if (led_fd < 0)
+    {
+      perror("open device leds");
+      exit(1);
+    }
+
+    set_led(led_fd, 0); //关闭led
 
     //2. 循环每隔1分钟上传1次数据
     while (1)
@@ -167,13 +214,15 @@ int main(int argc, char** argv)
             printf("平均湿度:%.2f\n", temp);
             printf("平均温度:%.2f\n", humidity);
 
-            socket = socket_init(HOST_NAME, PORT, 10 * 1000);
+            socket = socket_init(HOST_NAME, PORT, 2 * 1000);
             if (socket <= 0)
             {
                 printf("Can not connect to server!\n");
+                set_led(led_fd, 1); //打开所有led报警网络不通
             }
             else
             {
+                set_led(led_fd, 2); //打开led1
                 printf("send data!\n");
                 /* 发送温度 */
                 psenbuf = send_data_to_yeelink(DEVICE_NUM, SENSOR_TEMP, API_KEY, 0, temp);
@@ -199,15 +248,18 @@ int main(int argc, char** argv)
 #endif
                 socket_close(socket);   /* 关闭socket连接 */
                 printf("close!\n");
+                set_led(led_fd, 0); //关闭led
             }
 
-            socket = socket_init(HOST_NAME, PORT, 10 * 1000);
+            socket = socket_init(HOST_NAME, PORT, 2 * 1000);
             if (socket <= 0)
             {
                 printf("Can not connect to server!\n");
+                set_led(led_fd, 1); //打开所有led报警网络不通
             }
             else
             {
+                set_led(led_fd, 3); //打开led2
                 printf("send data!\n");
                 /* 发送湿度 */
                 psenbuf = send_data_to_yeelink(DEVICE_NUM, SENSOR_HUMIDITY, API_KEY, 0, humidity);
@@ -229,6 +281,7 @@ int main(int argc, char** argv)
 #endif
                 socket_close(socket);   /* 关闭socket连接 */
                 printf("close!\n");
+                set_led(led_fd, 0); //关闭led
             }
 
             humidity = 0.0f;
